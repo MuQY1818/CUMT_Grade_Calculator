@@ -119,9 +119,14 @@
 ### 1. 获取成绩单
 登录教务系统，按照以下步骤导出成绩单：
 
-| Step 1 | Step 2 | Step 3 |
-|:---:|:---:|:---:|
-| ![Step1](Figures/Step1.png) | ![Step2](Figures/Step2.png) | ![Step3](Figures/Step3.png) |
+**Step 1**
+![Step1](Figures/Step1.png)
+
+**Step 2**
+![Step2](Figures/Step2.png)
+
+**Step 3**
+![Step3](Figures/Step3.png)
 
 ### 2. 导入与设置
 - 点击首页 **「导入表格」**，选择下载的 Excel 文件。
