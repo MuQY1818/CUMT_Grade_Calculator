@@ -1,139 +1,177 @@
-# CUMT 成绩分析
+<div align="center">
+  <h1>🎓 CUMT Grade Calculator</h1>
+  <p>
+    <strong>中国矿业大学成绩分析工具</strong>
+  </p>
+  <p>
+    加权计算 / 智能诊断 / 可视化分析 / 报告导出
+  </p>
 
-[在线使用](https://grade.muqyy.top/) | [GitHub 仓库](https://github.com/MuQY1818/CUMT_Grade_Calculator)
+  <!-- Badges -->
+  <p>
+    <a href="https://github.com/MuQY1818/CUMT_Grade_Calculator/blob/main/LICENSE">
+      <img src="https://img.shields.io/github/license/MuQY1818/CUMT_Grade_Calculator?style=flat-square&color=blue" alt="License" />
+    </a>
+    <a href="https://grade.muqyy.top/">
+      <img src="https://img.shields.io/website?down_color=red&down_message=offline&label=Demo&style=flat-square&up_color=success&up_message=online&url=https%3A%2F%2Fgrade.muqyy.top%2F" alt="Website" />
+    </a>
+    <img src="https://img.shields.io/badge/React-18-61DAFB?style=flat-square&logo=react&logoColor=black" alt="React" />
+    <img src="https://img.shields.io/badge/Vite-646CFF?style=flat-square&logo=vite&logoColor=white" alt="Vite" />
+  </p>
 
-中国矿业大学成绩单分析工具，支持导入 Excel 成绩单，计算加权绩点、可视化分析及 AI 智能诊断。
+  <p>
+    <a href="https://grade.muqyy.top/">🚀 在线使用</a> · 
+    <a href="#-快速开始">📦 快速开始</a> · 
+    <a href="#-功能特性">✨ 功能特性</a> · 
+    <a href="#-问题反馈">🐛 问题反馈</a>
+  </p>
+</div>
 
-## 功能特性
+<br />
 
-- **📊 成绩导入**：支持 `.xlsx` 格式，自动解析课程、学分、成绩分项
-- **📈 统计指标**：计算加权均分、加权绩点、总学分
-- **⚙️ 规则设置**：
-  - ×1.2 公共课倍率
-  - 通识公选课处理
-  - 首次不及格按 60 分计
-  - 拓展课程组排除
-- **📉 可视化图表**：
-  - 成绩分布柱状图
-  - 学期趋势折线图
-- **🤖 AI 智能分析**：集成 SiliconFlow API，提供成绩诊断、学习规划、时间管理、职业建议
-- **📤 导出报告**：支持导出 PDF/PNG 格式的成绩分析报告
+## 📖 项目简介
 
-## 快速开始
+**CUMT Grade Calculator** 是一款专为中国矿业大学学生设计的成绩分析工具。它不仅支持从教务系统导出的 Excel 成绩单，还能根据学校的推免/保研计算规则（如 ×1.2 倍率、首次不及格处理等）进行精确的加权绩点计算。
+
+此外，集成了 **SiliconFlow AI**，为您提供深度的成绩诊断、学习规划与职业发展建议，助您从容应对学业挑战。
+
+---
+
+## 📸 界面预览
+
+| 📊 核心数据看板 | 🤖 AI 智能分析 |
+|:---:|:---:|
+| <img src="Figures/example1.png" alt="Dashboard" width="100%"> | <img src="Figures/example2.png" alt="AI Analysis" width="100%"> |
+
+> 💡 **提示**：支持导出精美的 PDF 成绩报告，方便存档或打印。
+
+---
+
+## ✨ 功能特性
+
+- **📊 智能导入**：一键上传 `.xlsx` 成绩单，自动识别课程、学分与成绩。
+- **⚙️ 灵活规则**：
+    - ✅ **加权倍率**：自动/手动标记 ×1.2 公共课。
+    - ✅ **特殊课程**：支持通识公选课、拓展课程组的筛选与剔除。
+    - ✅ **重修处理**：首次不及格课程按 60 分/1.0 绩点计算。
+- **📊 可视化图表**：
+    - 成绩分布直方图
+    - 学期均分趋势折线图
+- **🤖 AI 深度诊断**：
+    - 基于成绩数据的个性化 SWOT 分析。
+    - 生成学习计划、时间管理建议与职业规划。
+- **📤 专业报告**：支持生成并导出包含图表与详细数据的 PDF/PNG 报告。
+
+---
+
+## 🛠️ 技术栈
+
+![React](https://img.shields.io/badge/React-20232A?style=for-the-badge&logo=react&logoColor=61DAFB)
+![Vite](https://img.shields.io/badge/Vite-B73BFE?style=for-the-badge&logo=vite&logoColor=FFD62E)
+![Chart.js](https://img.shields.io/badge/Chart.js-F5788D?style=for-the-badge&logo=chartdotjs&logoColor=white)
+![html2canvas](https://img.shields.io/badge/html2canvas-E34F26?style=for-the-badge&logo=html5&logoColor=white)
+![OpenAI](https://img.shields.io/badge/AI_Powered-412991?style=for-the-badge&logo=openai&logoColor=white)
+
+---
+
+## 🚀 快速开始
 
 ### 环境要求
 
-- Node.js 18+
-- pnpm / npm
+- **Node.js**: >= 18.0.0
+- **pnpm** / **npm** / **yarn**
 
-### 安装依赖
+### 本地部署
 
-```bash
-npm install
-```
+1. **克隆仓库**
 
-### 启动开发服务器
+   ```bash
+   git clone https://github.com/MuQY1818/CUMT_Grade_Calculator.git
+   cd CUMT_Grade_Calculator
+   ```
 
-```bash
-npm run dev
-```
+2. **安装依赖**
 
-### 构建生产版本
+   ```bash
+   npm install
+   # 或者
+   pnpm install
+   ```
 
-```bash
-npm run build
-```
+3. **启动开发服务器**
 
-## 使用说明
+   ```bash
+   npm run dev
+   ```
+   
+   访问 `http://localhost:5173` 即可使用。
 
-### 1. 导入成绩单
+4. **构建生产版本**
 
-点击「导入表格」按钮，选择 `.xlsx` 格式的成绩单文件。工具会自动读取第一个工作表并解析课程数据。
+   ```bash
+   npm run build
+   ```
 
-### 2. 调整计算规则
+---
 
-点击「规则设置」可手动调整：
-- **×1.2 公共课**：对高等数学、大学物理等公共基础课启用分数 ×1.2 加权
-- **通识公选课**：处理通识公选课成绩
-- **首次不及格**：勾选后该课程按 60 分、绩点 1.0 计算
-- **拓展课程组**：在加权筛选时排除拓展课程组学分
+## 📖 使用指南
 
-### 3. 查看分析结果
+### 1. 获取成绩单
+登录教务系统，按照以下步骤导出成绩单：
 
-- **加权均分**：推免加权计算范围内的平均分
-- **加权绩点**：按推免规则计算的累计绩点
-- **成绩分布**：查看各分数段课程数量
-- **学期趋势**：查看各学期平均分变化
+| Step 1 | Step 2 | Step 3 |
+|:---:|:---:|:---:|
+| ![Step1](Figures/Step1.png) | ![Step2](Figures/Step2.png) | ![Step3](Figures/Step3.png) |
 
-### 4. AI 智能分析
+### 2. 导入与设置
+- 点击首页 **「导入表格」**，选择下载的 Excel 文件。
+- 点击 **「规则设置」**，根据实际情况开启/关闭加权规则（如 ×1.2、拓展课排除等）。
 
-1. 在 AI 面板填写 SiliconFlow API Key
-2. 选择模型（默认推荐 Qwen 系列）
-3. 可选填写额外说明（如「想提升数学类课程」「规划考研」）
-4. 点击「开始分析」获取诊断建议
+### 3. AI 分析
+- 在右下角 AI 面板输入您的 **SiliconFlow API Key**。
+- 点击 **「开始分析」**，等待 AI 生成专属报告。
 
-### 5. 导出报告
+### 📋 文件格式说明
 
-点击「导出报告」可选择：
-- **PDF**：导出完整的成绩分析报告
-- **PNG**：导出为图片格式
+如果您手动制作 Excel，请确保包含以下列（表头不区分大小写）：
 
-## 获取成绩单
+| 列名 | 说明 | 示例 |
+|:---|:---|:---|
+| **学年** | 课程所属学年 | `2023-2024` |
+| **学期** | 课程所属学期 | `1` 或 `2` |
+| **课程名称** | 课程全称 | `高等数学A(1)` |
+| **学分** | 课程学分 | `5.0` |
+| **总评** | 最终成绩 | `95` 或 `优秀` |
+| **分项名称** | (可选) 如平时、期中 | `平时` |
+| **分项成绩** | (可选) 各分项分数 | `90` |
+| **分项权重** | (可选) 各分项占比 | `30%` |
 
-从教务系统导出成绩单的步骤：
+---
 
-| 步骤 | 说明 |
-|------|------|
-| Step1 | ![Step1](Figures/Step1.png) |
-| Step2 | ![Step2](Figures/Step2.png) |
-| Step3 | ![Step3](Figures/Step3.png) |
+## 📂 项目结构
 
-## 界面预览
-
-| 主页 | AI 分析 |
-|------|---------|
-| ![Example1](Figures/example1.png) | ![Example2](Figures/example2.png) |
-
-## 文件格式要求
-
-Excel 文件应包含以下列（表头不区分大小写）：
-
-| 列名 | 说明 |
-|------|------|
-| 学年 | 如 2023-2024 |
-| 学期 | 1 或 2 |
-| 课程名称 | 课程全称 |
-| 学分 | 课程学分 |
-| 总评 | 最终成绩 |
-| 分项名称（可选）| 如平时、期中、期末 |
-| 分项成绩（可选）| 各分项分数 |
-| 分项权重（可选）| 各分项占比 |
-
-## 项目结构
-
-```
+```text
 src/
-├── App.jsx              # 主应用组件
-├── main.jsx             # 应用入口
-├── components/
-│   └── Charts.jsx       # 图表组件
-├── utils/
-│   ├── excel.js         # Excel 解析
-│   ├── grade.js         # 成绩计算逻辑
-│   ├── export.js        # 导出功能
-│   └── constants.js     # 常量定义
-└── styles.css           # 全局样式
+├── 📄 App.jsx              # 主应用逻辑
+├── 📄 main.jsx             # 入口文件
+├── 📂 components/          # UI 组件
+│   └── 📊 Charts.jsx       # 图表组件
+├── 📂 utils/               # 工具函数
+│   ├── 📝 excel.js         # Excel 解析器
+│   ├── 🧮 grade.js         # 核心计算算法
+│   ├── 📤 export.js        # 导出 PDF/图片
+│   └── 🔧 constants.js     # 常量配置
+└── 🎨 styles.css           # 全局样式
 ```
 
-## 技术栈
+---
 
-- **React 18** - UI 框架
-- **Vite** - 构建工具
-- **Chart.js + react-chartjs-2** - 图表
-- **xlsx** - Excel 解析
-- **html2canvas + jspdf** - 导出功能
-- **React Markdown** - Markdown 渲染
+## 📄 开源协议
 
-##  License
+本项目采用 [MIT License](LICENSE) 开源。
 
-MIT
+---
+
+<div align="center">
+  <p>Made with ❤️ by Weijue</p>
+</div>

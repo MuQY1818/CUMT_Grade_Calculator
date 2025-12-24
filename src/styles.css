@@ -1067,6 +1067,94 @@ input {
   }
 }
 
+/* Mobile Optimization */
+@media (max-width: 768px) {
+  .topbar {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 16px;
+  }
+
+  .top-actions {
+    width: 100%;
+    justify-content: space-between;
+  }
+
+  .stats-section {
+    grid-template-columns: 1fr; /* Stack stat cards */
+  }
+
+  .panel-row {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .search-input-wrapper,
+  .filter-group,
+  .toggle-row {
+    width: 100%;
+  }
+  
+  .pill-row, .pill-group {
+    flex-wrap: wrap;
+  }
+  
+  .filter-group {
+    flex-wrap: wrap;
+    padding: 8px;
+  }
+
+  /* AI Panel Mobile Layout */
+  .ai-header {
+    padding: 16px;
+  }
+  
+  .ai-output {
+    padding: 16px;
+  }
+  
+  .ai-controls {
+    padding: 16px;
+  }
+  
+  .ai-inputs-row {
+    grid-template-columns: 1fr; /* Stack inputs vertically */
+    gap: 12px;
+  }
+  
+  .ai-actions {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 12px;
+  }
+  
+  .ai-tip {
+    text-align: center;
+    margin-bottom: 4px;
+  }
+  
+  .ai-btn {
+    width: 100%; /* Full width button */
+    justify-content: center;
+  }
+  
+  /* Markdown adjustments for mobile */
+  .markdown-body {
+    font-size: 14px;
+    line-height: 1.6;
+  }
+  
+  .markdown-body h1 { font-size: 1.4em; }
+  .markdown-body h2 { font-size: 1.3em; }
+  .markdown-body h3 { font-size: 1.1em; }
+  
+  /* Adjust modal width */
+  .modal {
+    width: 94vw;
+    max-height: 85vh;
+  }
+}
+
 /* Detail Modal Styles */
 .detail-panel {
   display: flex;
