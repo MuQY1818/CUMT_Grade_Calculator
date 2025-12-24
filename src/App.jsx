@@ -250,7 +250,7 @@ export default function App() {
             },
             { role: 'user', content: prompt }
           ],
-          stream: true, // Enable streaming
+          stream: true,
           max_tokens: 1200,
           temperature: 0.7
         })
@@ -261,26 +261,51 @@ export default function App() {
         throw new Error(text || '请求失败')
       }
 
+      const contentType = response.headers.get('content-type') || ''
+      if (!response.body || !contentType.includes('text/event-stream')) {
+        const raw = await response.text()
+        let data
+        try {
+          data = JSON.parse(raw)
+        } catch (e) {
+          throw new Error(raw || '解析模型响应失败')
+        }
+        const content = data?.choices?.[0]?.message?.content || ''
+        setAiResult(content.trim() || '模型未返回内容，请稍后再试。')
+        return
+      }
+
       const reader = response.body.getReader()
-      const decoder = new TextDecoder()
+      const decoder = new TextDecoder('utf-8')
+      let buffer = ''
       let resultText = ''
 
       while (true) {
-        const { done, value } = await reader.read()
+        const { value, done } = await reader.read()
         if (done) break
-        
-        const chunk = decoder.decode(value, { stream: true })
-        const lines = chunk.split('\n')
-        
-        for (const line of lines) {
-          if (line.startsWith('data: ') && line !== 'data: [DONE]') {
-            try {
-              const data = JSON.parse(line.slice(6))
-              const content = data.choices?.[0]?.delta?.content || ''
-              resultText += content
+        buffer += decoder.decode(value, { stream: true })
+        const lines = buffer.split('\n')
+        buffer = lines.pop() || ''
+
+        for (let line of lines) {
+          line = line.trim()
+          if (!line || line === 'data: [DONE]' || line === '[DONE]') continue
+          if (line.startsWith('data:')) line = line.slice(5).trim()
+          if (!line) continue
+          try {
+            const data = JSON.parse(line)
+            const delta =
+              data?.choices?.[0]?.delta?.content ??
+              data?.choices?.[0]?.message?.content ??
+              ''
+            if (delta) {
+              resultText += delta
               setAiResult(resultText)
-            } catch (e) {
-              console.warn('Parse stream error', e)
+            }
+          } catch (e) {
+            // 可能是被拆开的 JSON，放回缓冲区等待下一段
+            if (line.startsWith('{') && !line.endsWith('}')) {
+              buffer = line + '\n' + buffer
             }
           }
         }
@@ -491,9 +516,7 @@ export default function App() {
               <div className="ai-layout-vertical">
                 <div className="ai-output">
                   {aiResult ? (
-                    <div className="markdown-body">
-                      <ReactMarkdown>{aiResult}</ReactMarkdown>
-                    </div>
+                    renderAiText(aiResult)
                   ) : (
                     <div className="ai-placeholder">
                       <div className="ai-icon">✨</div>
@@ -510,25 +533,27 @@ export default function App() {
                       value={apiKey}
                       onChange={(event) => setApiKey(event.target.value)}
                     />
-                    <select
+                    {models.length ? (
+                      <select
+                          className="text-input model-select"
+                          value={model}
+                          onChange={(event) => setModel(event.target.value)}
+                        >
+                          {models.map((item) => (
+                            <option key={item} value={item}>
+                              {item}
+                            </option>
+                          ))}
+                        </select>
+                    ) : (
+                      <input
                         className="text-input model-select"
+                        placeholder={modelsLoading ? '获取模型中...' : '模型名（列表拉取失败可手动输入）'}
                         value={model}
                         onChange={(event) => setModel(event.target.value)}
-                        disabled={!models.length}
-                      >
-                        {!apiKey.trim() && <option value="">请先填写 API Key</option>}
-                        {apiKey.trim() && modelsLoading && (
-                          <option value="">获取模型中...</option>
-                        )}
-                        {apiKey.trim() && !modelsLoading && !models.length && (
-                          <option value="">未获取到模型</option>
-                        )}
-                        {models.map((item) => (
-                          <option key={item} value={item}>
-                            {item}
-                          </option>
-                        ))}
-                      </select>
+                        disabled={!apiKey.trim()}
+                      />
+                    )}
                       <button
                         className="ghost-btn icon-only"
                         type="button"
@@ -549,6 +574,9 @@ export default function App() {
                   <div className="ai-actions">
                     <p className="ai-tip">
                        Key 仅保存在本地浏览器。
+                       {!models.length && apiKey.trim() && (
+                        <span className="text-danger"> 模型列表不可用时可手动输入。</span>
+                       )}
                        {modelsError && <span className="text-danger"> {modelsError}</span>}
                        {aiError && <span className="text-danger"> {aiError}</span>}
                     </p>
@@ -765,13 +793,7 @@ export default function App() {
         <div className="report-section">
           <h3>AI 分析摘要</h3>
           <div className="ai-report">
-            {aiResult ? (
-              <div className="markdown-body">
-                <ReactMarkdown>{aiResult}</ReactMarkdown>
-              </div>
-            ) : (
-              <p>未生成 AI 分析。</p>
-            )}
+            {aiResult ? renderAiText(aiResult) : <p>未生成 AI 分析。</p>}
           </div>
         </div>
       </section>
@@ -883,6 +905,14 @@ function formatNumber(value, digits = 2) {
 function formatScore(value) {
   if (value === null || value === undefined || Number.isNaN(value)) return '--'
   return Number(value).toFixed(1)
+}
+
+function renderAiText(text) {
+  return (
+    <div className="markdown-body">
+      <ReactMarkdown>{text}</ReactMarkdown>
+    </div>
+  )
 }
 
 function formatPercent(value) {
