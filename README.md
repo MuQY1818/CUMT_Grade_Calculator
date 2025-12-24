@@ -1,5 +1,7 @@
 # CUMT 成绩分析
 
+[在线使用](https://grade.muqyy.top/) | [GitHub 仓库](https://github.com/MuQY1818/CUMT_Grade_Calculator)
+
 中国矿业大学成绩单分析工具，支持导入 Excel 成绩单，计算加权绩点、可视化分析及 AI 智能诊断。
 
 ## 功能特性
@@ -75,6 +77,22 @@ npm run build
 点击「导出报告」可选择：
 - **PDF**：导出完整的成绩分析报告
 - **PNG**：导出为图片格式
+
+## 获取成绩单
+
+从教务系统导出成绩单的步骤：
+
+| 步骤 | 说明 |
+|------|------|
+| Step1 | ![Step1](Figures/Step1.png) |
+| Step2 | ![Step2](Figures/Step2.png) |
+| Step3 | ![Step3](Figures/Step3.png) |
+
+## 界面预览
+
+| 主页 | AI 分析 |
+|------|---------|
+| ![Example1](Figures/example1.png) | ![Example2](Figures/example2.png) |
 
 ## 文件格式要求
 
