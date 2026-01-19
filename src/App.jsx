@@ -69,6 +69,7 @@ export default function App() {
   const [aiLoading, setAiLoading] = useState(false)
   const [aiError, setAiError] = useState('')
   const [selectedCourse, setSelectedCourse] = useState(null)
+  const [isDragging, setIsDragging] = useState(false)
 
   useEffect(() => {
     localStorage.setItem('siliconflow_api_key', apiKey)
@@ -151,7 +152,12 @@ export default function App() {
   const handleFileChange = async (event) => {
     const file = event.target.files?.[0]
     if (!file) return
+    await processFile(file)
+  }
+
+  const processFile = async (file) => {
     setError('')
+    setIsDragging(false)
     try {
       const workbook = await readWorkbook(file)
       const rows = workbookToRows(workbook)
@@ -168,6 +174,38 @@ export default function App() {
     } catch (err) {
       setError('读取文件失败，请确认文件格式为 .xlsx')
       console.error(err)
+    }
+  }
+
+  const handleDragEnter = (e) => {
+    e.preventDefault()
+    e.stopPropagation()
+    setIsDragging(true)
+  }
+
+  const handleDragLeave = (e) => {
+    e.preventDefault()
+    e.stopPropagation()
+    setIsDragging(false)
+  }
+
+  const handleDragOver = (e) => {
+    e.preventDefault()
+    e.stopPropagation()
+  }
+
+  const handleDrop = async (e) => {
+    e.preventDefault()
+    e.stopPropagation()
+    const files = e.dataTransfer.files
+    if (files.length > 0) {
+      const file = files[0]
+      const ext = file.name.split('.').pop().toLowerCase()
+      if (ext === 'xlsx' || ext === 'xls') {
+        await processFile(file)
+      } else {
+        setError('仅支持 .xlsx 和 .xls 格式的文件')
+      }
     }
   }
 
@@ -405,9 +443,16 @@ export default function App() {
         {error && <div className="error-banner">{error}</div>}
 
         {!courses.length && (
-          <section className="empty-state">
+          <section
+            className={`empty-state ${isDragging ? 'empty-state-dragging' : ''}`}
+            onDragEnter={handleDragEnter}
+            onDragLeave={handleDragLeave}
+            onDragOver={handleDragOver}
+            onDrop={handleDrop}
+          >
             <h2>导入成绩单</h2>
             <p>支持 .xlsx 格式，默认读取第一个工作表。</p>
+            <p className="drag-tip">💡 可直接拖拽文件到此处</p>
             <button className="primary-btn" onClick={triggerFilePick}>
               选择文件
             </button>

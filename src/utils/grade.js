@@ -225,11 +225,11 @@ export function buildTermTrend(courses) {
     const term = course.term || ''
     const key = `${year}|${term}`
     if (!map.has(key)) {
-      map.set(key, { year, term, total: 0, count: 0 })
+      map.set(key, { year, term, weightedTotal: 0, totalCredits: 0 })
     }
     const entry = map.get(key)
-    entry.total += course.effectiveScore
-    entry.count += 1
+    entry.weightedTotal += course.effectiveScore * (course.credit || 0)
+    entry.totalCredits += course.credit || 0
   })
 
   const items = Array.from(map.values())
@@ -244,7 +244,7 @@ export function buildTermTrend(courses) {
 
   return items.map((item) => ({
     term: formatTermLabel(item.year, item.term),
-    avg: item.count ? item.total / item.count : 0
+    avg: item.totalCredits ? item.weightedTotal / item.totalCredits : 0
   }))
 }
 

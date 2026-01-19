@@ -230,6 +230,20 @@ input {
   border-radius: 24px;
   box-shadow: var(--shadow);
   text-align: center;
+  transition: all 0.3s ease;
+  border: 2px dashed transparent;
+}
+
+.empty-state.empty-state-dragging {
+  border-color: var(--primary);
+  background: var(--primary-soft);
+  transform: scale(1.02);
+}
+
+.drag-tip {
+  color: var(--text-sub);
+  font-size: 13px;
+  margin: 12px 0 20px !important;
 }
 
 .panel {
