@@ -199,6 +199,15 @@ export function computeStats(courses, ruleSet, options) {
   }
 }
 
+export function sumCredits(courses, ruleSet, options = {}) {
+  const { excludeExpansion = false, excludeElective = false } = options
+  return courses.reduce((sum, course) => {
+    if (excludeExpansion && ruleSet.expansion.has(course.key)) return sum
+    if (excludeElective && ruleSet.elective.has(course.key)) return sum
+    return sum + (course.credit || 0)
+  }, 0)
+}
+
 export function buildDistribution(courses) {
   const buckets = [
     { label: '90+', min: 90, max: Infinity },

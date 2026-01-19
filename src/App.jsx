@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import ReactMarkdown from 'react-markdown'
+import remarkGfm from 'remark-gfm'
 import { readWorkbook, workbookToRows } from './utils/excel'
 import {
   aggregateCourses,
@@ -8,11 +9,13 @@ import {
   buildDistribution,
   buildTermTrend,
   computeStats,
+  sumCredits,
   toRuleSet
 } from './utils/grade'
 import { exportReport } from './utils/export'
 import { MULTIPLIER_KEYWORDS } from './utils/constants'
 import { DistributionBar, TrendLine } from './components/Charts'
+import { AGENT_TOOLS, createToolRunner, extractToolCall } from './utils/agent'
 
 const SORT_OPTIONS = [
   { id: 'name', label: '名称' },
@@ -25,6 +28,14 @@ const RULE_TABS = [
   { id: 'elective', label: '通识公选课' },
   { id: 'firstFail', label: '首次不及格' },
   { id: 'expansion', label: '拓展课程组' }
+]
+
+const AGENT_QUICK_PROMPTS = [
+  { id: 'analysis', label: '成绩诊断', prompt: '请基于当前成绩给出成绩诊断、学习规划、时间管理与职业建议。' },
+  { id: 'credits', label: '已修学分', prompt: '我已经修了多少学分？' },
+  { id: 'low', label: '低分课程', prompt: '列出我的低分课程。' },
+  { id: 'trend', label: '学期趋势', prompt: '按学期汇总我的平均分和学分。' },
+  { id: 'goal', label: '目标均分', prompt: '如果我想保持95以上，下学期修20学分需要平均分多少？' }
 ]
 
 export default function App() {
@@ -64,10 +75,15 @@ export default function App() {
   const [models, setModels] = useState([])
   const [modelsLoading, setModelsLoading] = useState(false)
   const [modelsError, setModelsError] = useState('')
-  const [aiNote, setAiNote] = useState('')
-  const [aiResult, setAiResult] = useState('')
-  const [aiLoading, setAiLoading] = useState(false)
-  const [aiError, setAiError] = useState('')
+  const [agentNote, setAgentNote] = useState('')
+  const [agentInput, setAgentInput] = useState('')
+  const [agentMessages, setAgentMessages] = useState([])
+  const [agentResult, setAgentResult] = useState('')
+  const [agentLoading, setAgentLoading] = useState(false)
+  const [agentStreamText, setAgentStreamText] = useState('')
+  const [agentStreamVisible, setAgentStreamVisible] = useState(false)
+  const [agentStreamHint, setAgentStreamHint] = useState('thinking')
+  const [agentError, setAgentError] = useState('')
   const [selectedCourse, setSelectedCourse] = useState(null)
   const [isDragging, setIsDragging] = useState(false)
 
@@ -148,6 +164,36 @@ export default function App() {
 
   const distribution = useMemo(() => buildDistribution(analysisCourses), [analysisCourses])
   const trend = useMemo(() => buildTermTrend(analysisCourses), [analysisCourses])
+  const totalCredits = useMemo(() => sumCredits(courses, ruleSet, {}), [courses, ruleSet])
+  const creditsWithoutExpansion = useMemo(
+    () => sumCredits(courses, ruleSet, { excludeExpansion: true }),
+    [courses, ruleSet]
+  )
+  const toolRunner = useMemo(
+    () =>
+      createToolRunner({
+        courses,
+        derivedCourses,
+        analysisCourses,
+        ruleSet,
+        stats,
+        distribution,
+        trend,
+        useFilter,
+        useMultiplier
+      }),
+    [
+      courses,
+      derivedCourses,
+      analysisCourses,
+      ruleSet,
+      stats,
+      distribution,
+      trend,
+      useFilter,
+      useMultiplier
+    ]
+  )
 
   const handleFileChange = async (event) => {
     const file = event.target.files?.[0]
@@ -244,116 +290,268 @@ export default function App() {
     return base
   }, [courses, ruleSearch])
 
-  const handleAiAnalyze = async () => {
-    setAiError('')
-    if (!apiKey.trim()) {
-      setAiError('请先填写 SiliconFlow API Key')
-      return
-    }
-    if (!model) {
-      setAiError('请先获取并选择模型')
-      return
-    }
-    if (!courses.length) {
-      setAiError('请先导入成绩数据')
-      return
-    }
-
-    setAiLoading(true)
-    setAiResult('') // Clear previous result
-    try {
-      const prompt = buildAiPrompt({
-        stats,
-        courses: analysisCourses,
-        distribution,
-        trend,
-        useFilter,
-        useMultiplier,
-        note: aiNote
+  const requestAgentStream = async (messages, onDelta) => {
+    const response = await fetch('https://api.siliconflow.cn/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${apiKey.trim()}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        model,
+        messages,
+        stream: true,
+        max_tokens: 1200,
+        temperature: 0.6
       })
+    })
 
-      const response = await fetch('https://api.siliconflow.cn/v1/chat/completions', {
-        method: 'POST',
-        headers: {
-          Authorization: `Bearer ${apiKey.trim()}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          model,
-          messages: [
-            {
-              role: 'system',
-              content:
-                '你是专业的学业导师与学习规划师，需要用简洁清晰的中文输出成绩诊断、学习计划、时间管理与职业规划建议。'
-            },
-            { role: 'user', content: prompt }
-          ],
-          stream: true,
-          max_tokens: 1200,
-          temperature: 0.7
-        })
-      })
+    if (!response.ok) {
+      const text = await response.text()
+      throw new Error(text || '请求失败')
+    }
 
-      if (!response.ok) {
-        const text = await response.text()
-        throw new Error(text || '请求失败')
-      }
+    const contentType = response.headers.get('content-type') || ''
+    if (!response.body || !contentType.includes('text/event-stream')) {
+      const data = await response.json()
+      const content = data?.choices?.[0]?.message?.content || ''
+      const trimmed = content.trim()
+      if (trimmed) onDelta?.(trimmed, trimmed)
+      return trimmed
+    }
 
-      const contentType = response.headers.get('content-type') || ''
-      if (!response.body || !contentType.includes('text/event-stream')) {
-        const raw = await response.text()
-        let data
+    const reader = response.body.getReader()
+    const decoder = new TextDecoder('utf-8')
+    let buffer = ''
+    let resultText = ''
+
+    while (true) {
+      const { value, done } = await reader.read()
+      if (done) break
+      buffer += decoder.decode(value, { stream: true })
+      const lines = buffer.split('\n')
+      buffer = lines.pop() || ''
+
+      for (let line of lines) {
+        line = line.trim()
+        if (!line || line === 'data: [DONE]' || line === '[DONE]') continue
+        if (line.startsWith('data:')) line = line.slice(5).trim()
+        if (!line) continue
         try {
-          data = JSON.parse(raw)
-        } catch (e) {
-          throw new Error(raw || '解析模型响应失败')
-        }
-        const content = data?.choices?.[0]?.message?.content || ''
-        setAiResult(content.trim() || '模型未返回内容，请稍后再试。')
-        return
-      }
-
-      const reader = response.body.getReader()
-      const decoder = new TextDecoder('utf-8')
-      let buffer = ''
-      let resultText = ''
-
-      while (true) {
-        const { value, done } = await reader.read()
-        if (done) break
-        buffer += decoder.decode(value, { stream: true })
-        const lines = buffer.split('\n')
-        buffer = lines.pop() || ''
-
-        for (let line of lines) {
-          line = line.trim()
-          if (!line || line === 'data: [DONE]' || line === '[DONE]') continue
-          if (line.startsWith('data:')) line = line.slice(5).trim()
-          if (!line) continue
-          try {
-            const data = JSON.parse(line)
-            const delta =
-              data?.choices?.[0]?.delta?.content ??
-              data?.choices?.[0]?.message?.content ??
-              ''
-            if (delta) {
-              resultText += delta
-              setAiResult(resultText)
-            }
-          } catch (e) {
-            // 可能是被拆开的 JSON，放回缓冲区等待下一段
-            if (line.startsWith('{') && !line.endsWith('}')) {
-              buffer = line + '\n' + buffer
-            }
+          const data = JSON.parse(line)
+          const delta =
+            data?.choices?.[0]?.delta?.content ??
+            data?.choices?.[0]?.message?.content ??
+            ''
+          if (delta) {
+            resultText += delta
+            onDelta?.(delta, resultText)
+          }
+        } catch (err) {
+          if (line.startsWith('{') && !line.endsWith('}')) {
+            buffer = line + '\n' + buffer
           }
         }
       }
+    }
+
+    return resultText.trim()
+  }
+
+  const runAgentConversation = async (messages) => {
+    const cleanedMessages = (messages || []).filter(
+      (message) => message?.role === 'user' || message?.role === 'assistant'
+    )
+    const systemPrompt = buildAgentSystemPrompt({
+      tools: AGENT_TOOLS,
+      note: agentNote,
+      useFilter,
+      useMultiplier
+    })
+    let convo = [{ role: 'system', content: systemPrompt }, ...cleanedMessages]
+    const maxToolCalls = 6
+    let lastToolKey = ''
+    let repeatToolCount = 0
+
+    for (let i = 0; i < maxToolCalls; i += 1) {
+      setAgentStreamText('')
+      setAgentStreamVisible(false)
+      setAgentStreamHint('thinking')
+      let decided = false
+      let suppress = false
+
+      const assistantText = await requestAgentStream(convo, (_delta, fullText) => {
+        if (!decided) {
+          const trimmed = fullText.trimStart()
+          const looksLikeJson = trimmed.startsWith('{') || trimmed.startsWith('```json')
+          const looksLikeTool = looksLikeJson && /\"tool\"\s*:/i.test(trimmed.slice(0, 160))
+          if (looksLikeTool) {
+            suppress = true
+            decided = true
+            setAgentStreamHint('tool')
+            setAgentStreamVisible(false)
+            setAgentStreamText('')
+          } else if (trimmed.length > 0) {
+            suppress = false
+            decided = true
+            setAgentStreamHint('answer')
+          }
+        }
+
+        if (!suppress) {
+          setAgentStreamVisible(true)
+          setAgentStreamText(fullText)
+        }
+      })
+      const toolCall = extractToolCall(assistantText)
+
+      if (!toolCall) {
+        return assistantText || '模型未返回内容，请稍后再试。'
+      }
+
+      const toolName = toolCall.tool
+      let toolArgs = toolCall.arguments || {}
+      if (typeof toolArgs === 'string') {
+        try {
+          toolArgs = JSON.parse(toolArgs)
+        } catch (err) {
+          toolArgs = {}
+        }
+      }
+      if (!toolArgs || typeof toolArgs !== 'object') toolArgs = {}
+      const toolKey = `${toolName}:${JSON.stringify(toolArgs)}`
+      if (toolKey === lastToolKey) {
+        repeatToolCount += 1
+      } else {
+        repeatToolCount = 0
+        lastToolKey = toolKey
+      }
+      if (repeatToolCount >= 1) {
+        const finalAnswer = await requestAgentStream(
+          [
+            ...convo,
+            {
+              role: 'user',
+              content:
+                '你刚才在重复调用工具。请停止调用工具，直接基于已有信息给出结论和建议。'
+            }
+          ],
+          (_delta, fullText) => {
+            setAgentStreamHint('answer')
+            setAgentStreamVisible(true)
+            setAgentStreamText(fullText)
+          }
+        )
+        return finalAnswer || '模型未返回内容，请稍后再试。'
+      }
+      setAgentMessages((prev) => [
+        ...prev,
+        {
+          role: 'tool',
+          type: 'call',
+          tool: toolName,
+          payload: toolArgs
+        }
+      ])
+
+      const toolResult = toolRunner(toolName, toolArgs)
+
+      setAgentMessages((prev) => [
+        ...prev,
+        {
+          role: 'tool',
+          type: 'result',
+          tool: toolName,
+          payload: toolResult
+        }
+      ])
+
+      setAgentStreamHint('tool')
+
+      convo = [
+        ...convo,
+        { role: 'assistant', content: assistantText },
+        {
+          role: 'user',
+          content: `工具结果 ${toolName}:\n${JSON.stringify(toolResult, null, 2)}`
+        }
+      ]
+    }
+
+    const finalAnswer = await requestAgentStream(
+      [
+        ...convo,
+        {
+          role: 'user',
+          content:
+            '工具调用次数已达上限，请直接基于已有信息回答，不要再调用工具。'
+        }
+      ],
+      (_delta, fullText) => {
+        setAgentStreamHint('answer')
+        setAgentStreamVisible(true)
+        setAgentStreamText(fullText)
+      }
+    )
+    return finalAnswer || '模型未返回内容，请稍后再试。'
+  }
+
+  const handleAgentSend = async (overrideText) => {
+    setAgentError('')
+    const question = (overrideText ?? agentInput).trim()
+    if (!question) return
+
+    if (!apiKey.trim()) {
+      setAgentError('请先填写 SiliconFlow API Key')
+      return
+    }
+    if (!model) {
+      setAgentError('请先获取并选择模型')
+      return
+    }
+    if (!courses.length) {
+      setAgentError('请先导入成绩数据')
+      return
+    }
+
+    const baseMessages = agentMessages.filter(
+      (message) => message.role === 'user' || message.role === 'assistant'
+    )
+    const nextMessages = [...baseMessages, { role: 'user', content: question }]
+    setAgentMessages((prev) => [...prev, { role: 'user', content: question }])
+    setAgentInput('')
+    setAgentLoading(true)
+    setAgentStreamText('')
+    setAgentStreamVisible(false)
+    setAgentStreamHint('thinking')
+
+    try {
+      const answer = await runAgentConversation(nextMessages)
+      const reply = answer || '模型未返回内容，请稍后再试。'
+      setAgentMessages((prev) => [...prev, { role: 'assistant', content: reply }])
+      setAgentResult(reply)
     } catch (err) {
       console.error(err)
-      setAiError('AI 请求失败，请检查 Key、模型或网络环境。')
+      setAgentError('AI 请求失败，请检查 Key、模型或网络环境。')
     } finally {
-      setAiLoading(false)
+      setAgentLoading(false)
+      setAgentStreamText('')
+      setAgentStreamVisible(false)
     }
+  }
+
+  const handleQuickPrompt = (prompt) => {
+    if (agentLoading) return
+    handleAgentSend(prompt)
+  }
+
+  const handleClearChat = () => {
+    if (agentLoading) return
+    setAgentMessages([])
+    setAgentResult('')
+    setAgentError('')
+    setAgentStreamText('')
+    setAgentStreamVisible(false)
   }
 
   const fetchModels = async () => {
@@ -436,6 +634,18 @@ export default function App() {
             <div className="stat-content">
               <p className="stat-label">加权均分</p>
               <p className="stat-value">{formatNumber(stats.avgScore)}</p>
+            </div>
+          </div>
+          <div className="stat-card">
+            <div className="stat-icon icon-credit">📚</div>
+            <div className="stat-content">
+              <p className="stat-label">已修学分</p>
+              <p className="stat-value">{formatNumber(totalCredits, 1)}</p>
+              {useFilter && (
+                <span className="stat-sub">
+                  排除拓展：{formatNumber(creditsWithoutExpansion, 1)}
+                </span>
+              )}
             </div>
           </div>
         </section>
@@ -554,18 +764,69 @@ export default function App() {
             <section className="ai-panel" ref={aiRef}>
               <div className="ai-header">
                 <div>
-                  <h3>AI 智能分析</h3>
-                  <p>基于当前筛选与倍率设置生成诊断、学习规划与职业建议。</p>
+                  <h3>AI 智能体</h3>
+                  <p>可调用工具回答问题：已修学分、低分课程、学期趋势等。</p>
+                </div>
+                <div className="ai-tool-tags">
+                  <span>工具：学分统计</span>
+                  <span>课程检索</span>
+                  <span>学期汇总</span>
+                  <span>高低分排行</span>
+                  <span>目标均分计算</span>
                 </div>
               </div>
               <div className="ai-layout-vertical">
                 <div className="ai-output">
-                  {aiResult ? (
-                    renderAiText(aiResult)
+                  {agentMessages.length ? (
+                    <div className="chat-list">
+                      {agentMessages.map((message, index) => (
+                        <div
+                          key={`${message.role}-${index}`}
+                          className={`chat-item ${message.role}`}
+                        >
+                          <div className="chat-role">
+                            {message.role === 'user'
+                              ? '你'
+                              : message.role === 'tool'
+                              ? '工具'
+                              : 'AI'}
+                          </div>
+                          <div className="chat-bubble">
+                            {message.role === 'assistant' ? (
+                              renderAiText(message.content)
+                            ) : message.role === 'tool' ? (
+                              <div className="tool-card">
+                                <div className="tool-title">
+                                  {message.type === 'result' ? '工具结果' : '工具调用'} ·{' '}
+                                  {message.tool}
+                                </div>
+                                <pre className="tool-json">
+                                  {JSON.stringify(message.payload, null, 2)}
+                                </pre>
+                              </div>
+                            ) : (
+                              <p>{message.content}</p>
+                            )}
+                          </div>
+                        </div>
+                      ))}
+                      {agentLoading && (
+                        <div className="chat-item assistant">
+                          <div className="chat-role">AI</div>
+                          <div className="chat-bubble">
+                            {agentStreamVisible && agentStreamText ? (
+                              renderAiText(agentStreamText)
+                            ) : (
+                              <p>{agentStreamHint === 'tool' ? '正在调用工具...' : '正在思考...'}</p>
+                            )}
+                          </div>
+                        </div>
+                      )}
+                    </div>
                   ) : (
                     <div className="ai-placeholder">
                       <div className="ai-icon">✨</div>
-                      <p>点击下方按钮，开始智能分析您的成绩单</p>
+                      <p>输入问题或选择快捷提问，AI 将调用工具回答。</p>
                     </div>
                   )}
                 </div>
@@ -610,12 +871,37 @@ export default function App() {
                       </button>
                   </div>
                   <textarea
-                      className="text-area"
-                      placeholder="额外说明（可选），例如：想提升数学类课程 / 想规划考研与实习时间"
-                      rows={2}
-                      value={aiNote}
-                      onChange={(event) => setAiNote(event.target.value)}
-                    />
+                    className="text-area ai-question"
+                    placeholder="输入你的问题，例如：我修了多少学分？/ 列出低分课程"
+                    rows={3}
+                    value={agentInput}
+                    onChange={(event) => setAgentInput(event.target.value)}
+                    onKeyDown={(event) => {
+                      if ((event.metaKey || event.ctrlKey) && event.key === 'Enter') {
+                        handleAgentSend()
+                      }
+                    }}
+                  />
+                  <textarea
+                    className="text-area ai-note"
+                    placeholder="偏好或背景（可选），例如：想提升数学类课程 / 想规划考研与实习时间"
+                    rows={2}
+                    value={agentNote}
+                    onChange={(event) => setAgentNote(event.target.value)}
+                  />
+                  <div className="ai-quick-row">
+                    {AGENT_QUICK_PROMPTS.map((item) => (
+                      <button
+                        key={item.id}
+                        className="chip-btn"
+                        type="button"
+                        onClick={() => handleQuickPrompt(item.prompt)}
+                        disabled={agentLoading}
+                      >
+                        {item.label}
+                      </button>
+                    ))}
+                  </div>
                   <div className="ai-actions">
                     <p className="ai-tip">
                        Key 仅保存在本地浏览器。
@@ -623,15 +909,25 @@ export default function App() {
                         <span className="text-danger"> 模型列表不可用时可手动输入。</span>
                        )}
                        {modelsError && <span className="text-danger"> {modelsError}</span>}
-                       {aiError && <span className="text-danger"> {aiError}</span>}
+                       {agentError && <span className="text-danger"> {agentError}</span>}
                     </p>
-                    <button
-                      className="primary-btn ai-btn"
-                      onClick={handleAiAnalyze}
-                      disabled={aiLoading}
-                    >
-                      {aiLoading ? '正在思考...' : '✨ 开始分析'}
-                    </button>
+                    <div className="ai-action-buttons">
+                      <button
+                        className="ghost-btn"
+                        type="button"
+                        onClick={handleClearChat}
+                        disabled={agentLoading || !agentMessages.length}
+                      >
+                        清空对话
+                      </button>
+                      <button
+                        className="primary-btn ai-btn"
+                        onClick={() => handleAgentSend()}
+                        disabled={agentLoading}
+                      >
+                        {agentLoading ? '正在思考...' : '发送'}
+                      </button>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -792,7 +1088,7 @@ export default function App() {
         <div className="report-cards">
           <ReportCard label="加权绩点" value={formatNumber(stats.avgGpa)} />
           <ReportCard label="加权均分" value={formatNumber(stats.avgScore)} />
-          <ReportCard label="总学分" value={formatNumber(stats.totalCredits, 1)} />
+          <ReportCard label="总学分" value={formatNumber(totalCredits, 1)} />
         </div>
         <div className="report-section">
           <h3>成绩分布</h3>
@@ -837,8 +1133,8 @@ export default function App() {
         </div>
         <div className="report-section">
           <h3>AI 分析摘要</h3>
-          <div className="ai-report">
-            {aiResult ? renderAiText(aiResult) : <p>未生成 AI 分析。</p>}
+        <div className="ai-report">
+            {agentResult ? renderAiText(agentResult) : <p>未生成 AI 分析。</p>}
           </div>
         </div>
       </section>
@@ -955,7 +1251,7 @@ function formatScore(value) {
 function renderAiText(text) {
   return (
     <div className="markdown-body">
-      <ReactMarkdown>{text}</ReactMarkdown>
+      <ReactMarkdown remarkPlugins={[remarkGfm]}>{text}</ReactMarkdown>
     </div>
   )
 }
@@ -965,52 +1261,26 @@ function formatPercent(value) {
   return `${Number(value * 100).toFixed(0)}%`
 }
 
-function buildAiPrompt({ stats, courses, distribution, trend, useFilter, useMultiplier, note }) {
-  const scored = courses.filter((course) => course.effectiveScore !== null)
-  const topCourses = [...scored]
-    .sort((a, b) => b.effectiveScore - a.effectiveScore)
-    .slice(0, 5)
-    .map((course) => ({
-      课程: course.name,
-      成绩: round(course.effectiveScore),
-      学分: course.credit
-    }))
-  const bottomCourses = [...scored]
-    .sort((a, b) => a.effectiveScore - b.effectiveScore)
-    .slice(0, 5)
-    .map((course) => ({
-      课程: course.name,
-      成绩: round(course.effectiveScore),
-      学分: course.credit
-    }))
+function buildAgentSystemPrompt({ tools, note, useFilter, useMultiplier }) {
+  const toolLines = tools
+    .map((tool) => {
+      const params = tool.parameters && Object.keys(tool.parameters).length
+        ? JSON.stringify(tool.parameters, null, 2)
+        : '无'
+      return `工具: ${tool.name}\n说明: ${tool.description}\n参数: ${params}`
+    })
+    .join('\n\n')
 
-  const summary = {
-    规则说明: {
-      加权筛选: useFilter ? '已开启（排除拓展课程组）' : '未开启',
-      加权倍率: useMultiplier ? '已开启（分数×1.2）' : '未开启',
-      首次不及格: '勾选课程按60分计',
-      公选课: '平均分按10学分参与推免加权'
+  const toolSchema = JSON.stringify(
+    {
+      tool: '工具名',
+      arguments: {
+        key: 'value'
+      }
     },
-    关键指标: {
-      课程数: scored.length,
-      加权均分: round(stats.avgScore),
-      加权绩点: round(stats.avgGpa),
-      总学分: round(stats.totalCredits, 1)
-    },
-    成绩分布: distribution,
-    学期趋势: trend.map((item) => ({ 学期: item.term, 平均分: round(item.avg) })),
-    高分课程: topCourses,
-    低分课程: bottomCourses
-  }
-
-  return `请基于以下成绩摘要进行分析，并按【成绩诊断】【学习规划】【时间管理】【职业规划建议】【风险提醒】输出。\n\n成绩摘要：\n${JSON.stringify(
-    summary,
     null,
     2
-  )}\n\n额外说明：${note ? note : '无'}`
-}
+  )
 
-function round(value, digits = 2) {
-  if (value === null || value === undefined || Number.isNaN(value)) return 0
-  return Number(value.toFixed(digits))
+  return `你是一个成绩分析智能体，必须使用中文回答。\n当前开关：加权筛选=${useFilter ? '开启' : '关闭'}，加权倍率=${useMultiplier ? '开启' : '关闭'}。\n${note ? `用户补充：${note}` : '用户补充：无'}\n\n可用工具：\n${toolLines}\n\n工具调用规则：\n- 需要工具时，只输出一行 JSON，且必须符合以下结构：\n${toolSchema}\n- 不需要工具时，直接输出完整回答，不要输出 JSON\n- 工具结果可信，优先基于工具结果回答\n- 如缺少关键参数，请先向用户追问\n- 避免重复调用同一工具；若信息已足够，请直接给结论\n`
 }
