@@ -8,7 +8,10 @@ export const MULTIPLIER_KEYWORDS = [
   '中国近现代史纲要',
   '思想道德与法治',
   '形势与政策',
-  '形式与政策'
+  '形式与政策',
+  '习近平新时代中国特色社会主义思想概论',
+  '习思想',
+  '习近平思想'
 ]
 
 export const WORD_SCORE_MAP = {
